@@ -41,6 +41,8 @@ TcpRelaySession::~TcpRelaySession() {
 }
 
 void TcpRelaySession::start() {
+    asio::error_code ignored;
+    socket_.set_option(asio::ip::tcp::no_delay(true), ignored);
     read_salt();
 }
 
@@ -163,11 +165,13 @@ void TcpRelaySession::flush_to_lwip() {
         if (tcp_sndbuf(pcb_) < pkt.size() || tcp_sndbuf(pcb_) < LwipSndLowWater ||
             tcp_sndqueuelen(pcb_) >= LwipSndQueueHighWater) {
             client_read_paused_ = true;
+            tcp_output(pcb_);
             return;
         }
         const auto err = tcp_write(pcb_, pkt.data(), static_cast<u16_t>(pkt.size()), TCP_WRITE_FLAG_COPY);
         if (err == ERR_MEM) {
             client_read_paused_ = true;
+            tcp_output(pcb_);
             return;
         }
         if (err != ERR_OK) {

@@ -350,6 +350,21 @@ void LwipRuntime::set_packet_output(std::function<void(std::span<const std::byte
     packet_output_ = std::move(output);
 }
 
+void LwipRuntime::post_inject_l3_packet(std::span<const std::byte> packet) {
+    if (packet.empty()) {
+        return;
+    }
+    std::vector<std::byte> owned(packet.begin(), packet.end());
+    std::weak_ptr<bool> lifetime = lifetime_token_;
+    asio::post(io_, [this, lifetime, owned = std::move(owned)] {
+        auto token = lifetime.lock();
+        if (!token || !*token || !running_) {
+            return;
+        }
+        inject_l3_packet(std::span<const std::byte>(owned.data(), owned.size()));
+    });
+}
+
 LwipRuntime::StackUse LwipRuntime::acquire_stack() {
     return StackUse(*this);
 }

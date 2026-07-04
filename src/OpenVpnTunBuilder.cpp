@@ -99,7 +99,7 @@ void OpenVpnTunBuilder::tun_builder_teardown(bool) {
 
 void OpenVpnTunBuilder::inject_from_openvpn(std::span<const std::byte> packet) {
     try {
-        lwip_.inject_l3_packet(packet);
+        lwip_.post_inject_l3_packet(packet);
     } catch (...) {
     }
 }

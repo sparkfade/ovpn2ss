@@ -55,6 +55,7 @@ public:
     void apply_tun_config(const TunConfig& config);
     void apply_tun_config_and_output(const TunConfig& config, std::function<void(std::span<const std::byte>)> output);
     void inject_l3_packet(std::span<const std::byte> packet);
+    void post_inject_l3_packet(std::span<const std::byte> packet);
     void set_packet_output(std::function<void(std::span<const std::byte>)> output);
     [[nodiscard]] StackUse acquire_stack();
 
