@@ -300,10 +300,14 @@ void OpenVpnClient::start() {
 
     vpn_thread_ = std::jthread([this, non_preferred, make_config](std::stop_token stop_token) {
         bool using_non_preferred = non_preferred;
+        int reconnect_delay_ms = 2000;
+        constexpr int max_reconnect_delay_ms = 30000;
 
         while (running_ && !stop_token.stop_requested()) {
             try {
                 const auto status = impl_->core.connect();
+
+                reconnect_delay_ms = 500;
 
                 if (needs_downgrade_.exchange(false) && !using_non_preferred && running_) {
                     using_non_preferred = true;
@@ -329,20 +333,28 @@ void OpenVpnClient::start() {
                 }
             }
 
-            if (running_ && !stop_token.stop_requested()) {
-                for (int i = 0; i < 10 && running_ && !stop_token.stop_requested(); ++i) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
+            if (!running_ || stop_token.stop_requested()) {
+                break;
             }
-            if (running_ && !stop_token.stop_requested()) {
-                impl_.reset(new Impl(*this));
-                auto next_config = make_config(using_non_preferred);
-                auto next_eval = impl_->core.eval_config(next_config);
-                if (next_eval.error) {
-                    std::clog << "openvpn3: reconnect eval_config failed: " << next_eval.message << '\n';
-                    running_ = false;
-                    return;
-                }
+
+            std::clog << "openvpn3: waiting " << reconnect_delay_ms << "ms before reconnect...\n";
+            for (int elapsed = 0; elapsed < reconnect_delay_ms && running_ && !stop_token.stop_requested(); elapsed += 200) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+
+            if (!running_ || stop_token.stop_requested()) {
+                break;
+            }
+
+            reconnect_delay_ms = std::min(reconnect_delay_ms * 2, max_reconnect_delay_ms);
+
+            impl_.reset(new Impl(*this));
+            auto next_config = make_config(using_non_preferred);
+            auto next_eval = impl_->core.eval_config(next_config);
+            if (next_eval.error) {
+                std::clog << "openvpn3: reconnect eval_config failed: " << next_eval.message << '\n';
+                running_ = false;
+                return;
             }
         }
         running_ = false;

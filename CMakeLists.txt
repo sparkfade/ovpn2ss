@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(ovpn2ss VERSION 0.1.4 LANGUAGES C CXX)
+project(ovpn2ss VERSION 0.1.5 LANGUAGES C CXX)
 
 include(CheckCXXSourceCompiles)
 
