@@ -359,6 +359,7 @@ tcp_pcb* LwipRuntime::tcp_new_pcb() {
     auto* pcb = tcp_new_ip_type(IPADDR_TYPE_ANY);
     if (pcb != nullptr) {
         tcp_bind_netif(pcb, &netif_);
+        tcp_nagle_disable(pcb);
     }
     return pcb;
 }
