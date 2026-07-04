@@ -1,0 +1,57 @@
+# Build outputs
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+compile_commands.json
+Testing/
+
+# Compiled artifacts
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.o
+*.obj
+*.lo
+*.la
+ovpn2ss_app
+ovpn2ss_unit_tests
+
+# Runtime files
+*.log
+*.pid
+*.core
+/core
+nohup.out
+
+# Local configuration and secrets
+config.json
+config.local.json
+*.ovpn
+*.key
+*.crt
+*.pem
+*.p12
+*.pfx
+*.auth
+
+# Editors and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Tool caches
+.cache/
+.clangd/
+.ccls-cache/
+.pytest_cache/

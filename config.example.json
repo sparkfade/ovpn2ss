@@ -1,0 +1,13 @@
+{
+  "instances": [
+    {
+      "name": "office-vpn",
+      "ovpn": "/absolute/path/to/office.ovpn",
+      "listen_host": "127.0.0.1",
+      "tcp_port": 10801,
+      "udp_port": 10801,
+      "method": "chacha20-ietf-poly1305",
+      "password": "replace-with-a-strong-password"
+    }
+  ]
+}
