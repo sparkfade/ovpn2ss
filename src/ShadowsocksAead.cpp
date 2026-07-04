@@ -155,13 +155,13 @@ std::optional<PacketBuffer> ShadowsocksAeadSession::decrypt_tcp_chunk(std::span<
         return std::nullopt;
     }
 
-    recv_nonce_ = trial_nonce;
     PacketBuffer plain(payload_len);
     auto payload = encrypted_stream.subspan(2 + TagSize, payload_len);
     auto payload_tag = std::span<const std::byte, TagSize>(encrypted_stream.subspan(2 + TagSize + payload_len, TagSize));
-    if (!decrypt(recv_key_, recv_nonce_, payload, payload_tag, plain.span())) {
+    if (!decrypt(recv_key_, trial_nonce, payload, payload_tag, plain.span())) {
         throw std::runtime_error("invalid Shadowsocks AEAD TCP payload tag");
     }
+    recv_nonce_ = trial_nonce;
     encrypted_stream = encrypted_stream.subspan(need);
     return plain;
 }

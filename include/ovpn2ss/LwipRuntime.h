@@ -53,6 +53,7 @@ public:
     void poll_timeouts();
 
     void apply_tun_config(const TunConfig& config);
+    void apply_tun_config_and_output(const TunConfig& config, std::function<void(std::span<const std::byte>)> output);
     void inject_l3_packet(std::span<const std::byte> packet);
     void set_packet_output(std::function<void(std::span<const std::byte>)> output);
     [[nodiscard]] StackUse acquire_stack();
@@ -72,6 +73,7 @@ private:
     static void dns_recv(void* arg, udp_pcb* pcb, pbuf* p, const ip_addr_t* addr, u16_t port);
 
     void arm_timer();
+    void apply_tun_config_locked(const TunConfig& config);
     err_t emit_packet(pbuf* p);
     void complete_dns_query(std::uint16_t id, err_t err, std::optional<ip_addr_t> ip);
     [[nodiscard]] std::optional<ip_addr_t> dns_server() const;

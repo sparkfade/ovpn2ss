@@ -1,6 +1,7 @@
 #include "ovpn2ss/TcpRelaySession.h"
 
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
 
 namespace ovpn2ss {
@@ -104,6 +105,7 @@ void TcpRelaySession::process_decrypted_chunk(PacketBuffer chunk) {
             return;
         }
         got_target_ = true;
+        std::clog << "ovpn2ss: tcp target " << target->host << ':' << target->port << '\n';
         connect_target(*target);
     }
     if (!bytes.empty()) {
@@ -133,6 +135,7 @@ void TcpRelaySession::connect_ip(const ip_addr_t& ip, std::uint16_t port) {
     tcp_err(pcb_, &TcpRelaySession::on_err);
     active_self_ = shared_from_this();
     if (tcp_connect(pcb_, &ip, port, &TcpRelaySession::on_connected) != ERR_OK) {
+        std::clog << "ovpn2ss: lwip tcp_connect failed\n";
         close();
     }
 }
@@ -232,9 +235,28 @@ void TcpRelaySession::maybe_resume_client_read() {
 
 void TcpRelaySession::handle_client_eof() {
     client_eof_ = true;
-    if (pcb_ != nullptr) {
+    {
         auto stack = lwip_.acquire_stack();
-        tcp_shutdown(pcb_, 0, 1);
+        if (pcb_ != nullptr) {
+            switch (pcb_->state) {
+            case SYN_RCVD:
+            case ESTABLISHED:
+            case CLOSE_WAIT:
+                if (tcp_shutdown(pcb_, 0, 1) != ERR_OK) {
+                    detach_pcb_callbacks();
+                    tcp_abort(pcb_);
+                    pcb_ = nullptr;
+                    release_active_self();
+                }
+                break;
+            default:
+                detach_pcb_callbacks();
+                tcp_abort(pcb_);
+                pcb_ = nullptr;
+                release_active_self();
+                break;
+            }
+        }
     }
     if (remote_eof_ || pcb_ == nullptr) {
         close();
@@ -306,9 +328,11 @@ err_t TcpRelaySession::on_connected(void* arg, tcp_pcb*, err_t err) {
     auto* self = static_cast<TcpRelaySession*>(arg);
     auto stack = self->lwip_.acquire_stack();
     if (err != ERR_OK) {
+        std::clog << "ovpn2ss: lwip tcp connected callback error=" << static_cast<int>(err) << '\n';
         self->close();
         return err;
     }
+    std::clog << "ovpn2ss: lwip tcp connected\n";
     self->flush_to_lwip();
     return ERR_OK;
 }

@@ -33,7 +33,7 @@ namespace {
 openvpn::BufferAllocated make_openvpn_buffer(std::span<const std::byte> packet) {
     constexpr std::size_t HEADROOM = 512;
     openvpn::BufferAllocated buf(packet.size() + HEADROOM, openvpn::BufAllocFlags::GROW);
-    buf.reset_offset(HEADROOM);
+    buf.init_headroom(HEADROOM);
     std::memcpy(buf.write_alloc(packet.size()), packet.data(), packet.size());
     return buf;
 }
@@ -87,6 +87,11 @@ struct OpenVpnClient::Impl {
                 }
                 connected = true;
                 parent.tun_connected();
+                std::clog << "ovpn2ss: tun ready name=" << tun_name()
+                          << " ip4=" << vpn_ip4()
+                          << " gw4=" << vpn_gw4()
+                          << " mtu=" << vpn_mtu() << '\n';
+                owner.notify_tun_ready();
             } catch (const std::exception& e) {
                 parent.tun_error(openvpn::Error::TUN_SETUP_FAILED, e.what());
             }
@@ -95,10 +100,12 @@ struct OpenVpnClient::Impl {
         void stop() override {
             connected = false;
             owner.tun_builder_.tun_builder_teardown(true);
+            owner.notify_tun_down();
         }
 
         void set_disconnect() override {
             connected = false;
+            owner.notify_tun_down();
         }
 
         bool tun_send(openvpn::BufferAllocated& buf) override {
@@ -167,6 +174,7 @@ struct OpenVpnClient::Impl {
             if (ev.name == "DISCONNECTED") {
                 std::lock_guard lock(mutex);
                 memory_tun = nullptr;
+                owner.notify_tun_down();
             }
         }
         void acc_event(const openvpn::ClientAPI::AppCustomControlMessageEvent&) override {}
@@ -326,6 +334,16 @@ void OpenVpnClient::start() {
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
             }
+            if (running_ && !stop_token.stop_requested()) {
+                impl_.reset(new Impl(*this));
+                auto next_config = make_config(using_non_preferred);
+                auto next_eval = impl_->core.eval_config(next_config);
+                if (next_eval.error) {
+                    std::clog << "openvpn3: reconnect eval_config failed: " << next_eval.message << '\n';
+                    running_ = false;
+                    return;
+                }
+            }
         }
         running_ = false;
     });
@@ -342,6 +360,38 @@ void OpenVpnClient::stop() {
         impl_->core.stop();
     }
 #endif
+}
+
+void OpenVpnClient::set_ready_handler(std::function<void()> handler) {
+    std::lock_guard lock(handler_mutex_);
+    ready_handler_ = std::move(handler);
+}
+
+void OpenVpnClient::set_disconnect_handler(std::function<void()> handler) {
+    std::lock_guard lock(handler_mutex_);
+    disconnect_handler_ = std::move(handler);
+}
+
+void OpenVpnClient::notify_tun_ready() {
+    std::function<void()> handler;
+    {
+        std::lock_guard lock(handler_mutex_);
+        handler = ready_handler_;
+    }
+    if (handler) {
+        handler();
+    }
+}
+
+void OpenVpnClient::notify_tun_down() {
+    std::function<void()> handler;
+    {
+        std::lock_guard lock(handler_mutex_);
+        handler = disconnect_handler_;
+    }
+    if (handler) {
+        handler();
+    }
 }
 
 void OpenVpnClient::send_l3_packet(std::span<const std::byte> packet) {

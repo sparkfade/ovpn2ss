@@ -111,6 +111,27 @@ void MultiInstanceManager::start() {
         instance->lwip = std::make_unique<LwipRuntime>(*instance->io);
         instance->vpn = std::make_unique<OpenVpnClient>(*instance->io, *instance->lwip, cfg);
         instance->ss = std::make_unique<ShadowsocksInbound>(*instance->io, *instance->lwip, cfg.shadowsocks);
+        auto* runtime = instance.get();
+        instance->vpn->set_ready_handler([this, runtime] {
+            asio::post(*runtime->io, [this, runtime] {
+                if (!running_.load()) {
+                    return;
+                }
+                if (runtime->ss) {
+                    runtime->ss->start();
+                }
+            });
+        });
+        instance->vpn->set_disconnect_handler([this, runtime] {
+            asio::post(*runtime->io, [this, runtime] {
+                if (!running_.load()) {
+                    return;
+                }
+                if (runtime->ss) {
+                    runtime->ss->stop();
+                }
+            });
+        });
         start_instance(*instance);
         instances_.push_back(std::move(instance));
     }
@@ -126,6 +147,8 @@ void MultiInstanceManager::stop() {
             auto stopped = std::make_shared<std::promise<void>>();
             auto done = stopped->get_future();
             asio::post(*instance->io, [runtime, stopped] {
+                runtime->vpn->set_ready_handler({});
+                runtime->vpn->set_disconnect_handler({});
                 runtime->ss->stop();
                 runtime->vpn->stop();
                 runtime->lwip->stop();
@@ -145,7 +168,6 @@ void MultiInstanceManager::start_instance(InstanceRuntime& instance) {
         try {
             runtime->lwip->start();
             runtime->vpn->start();
-            runtime->ss->start();
         } catch (...) {
             runtime->lwip->stop();
         }

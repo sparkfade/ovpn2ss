@@ -14,8 +14,7 @@ bool OpenVpnTunBuilder::tun_builder_new() {
 
 int OpenVpnTunBuilder::tun_builder_establish() {
     try {
-        lwip_.apply_tun_config(pending_);
-        lwip_.set_packet_output([this](std::span<const std::byte> packet) {
+        lwip_.apply_tun_config_and_output(pending_, [this](std::span<const std::byte> packet) {
             send_from_lwip(packet);
         });
         return 0;

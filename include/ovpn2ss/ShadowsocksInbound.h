@@ -19,6 +19,7 @@ public:
     void stop();
 
 private:
+    void open_tcp_acceptor();
     void accept_loop();
 
     asio::ip::tcp::acceptor tcp_acceptor_;
@@ -27,6 +28,7 @@ private:
     ShadowsocksAeadFactory crypto_;
     std::shared_ptr<UdpRelaySession> udp_;
     asio::io_context& io_;
+    bool started_{false};
 };
 
 } // namespace ovpn2ss

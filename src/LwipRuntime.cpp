@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstring>
 #include <exception>
+#include <iostream>
 #include <limits>
 #include <mutex>
 #include <stdexcept>
@@ -229,6 +230,7 @@ LwipRuntime::LwipRuntime(asio::io_context& io)
     netif_.output = &LwipRuntime::output_ipv4;
     netif_.output_ip6 = &LwipRuntime::output_ipv6;
     netif_.linkoutput = &LwipRuntime::linkoutput;
+    netif_set_default(&netif_);
     netif_set_up(&netif_);
     netif_set_link_up(&netif_);
 }
@@ -283,6 +285,16 @@ void LwipRuntime::poll_timeouts() {
 
 void LwipRuntime::apply_tun_config(const TunConfig& config) {
     auto stack = acquire_stack();
+    apply_tun_config_locked(config);
+}
+
+void LwipRuntime::apply_tun_config_and_output(const TunConfig& config, std::function<void(std::span<const std::byte>)> output) {
+    auto stack = acquire_stack();
+    apply_tun_config_locked(config);
+    packet_output_ = std::move(output);
+}
+
+void LwipRuntime::apply_tun_config_locked(const TunConfig& config) {
     active_config_ = config;
     netif_.mtu = static_cast<u16_t>(config.mtu > 0 ? config.mtu : 1500);
 
@@ -304,6 +316,9 @@ void LwipRuntime::apply_tun_config(const TunConfig& config) {
             gw = *ip_2_ip4(&gateway);
         }
         netif_set_addr(&netif_, ip_2_ip4(&ip), &mask, &gw);
+        std::clog << "ovpn2ss: lwip ipv4 address=" << ipaddr_ntoa(&ip)
+                  << " gateway=" << ip4addr_ntoa(&gw)
+                  << " mtu=" << netif_.mtu << '\n';
     }
 
 }
@@ -485,6 +500,11 @@ err_t LwipRuntime::emit_packet(pbuf* p) {
         return ERR_BUF;
     }
 
+    static std::atomic_uint logged_packets{0};
+    const auto count = logged_packets.fetch_add(1, std::memory_order_relaxed);
+    if (count < 8) {
+        std::clog << "ovpn2ss: lwip -> openvpn packet bytes=" << bytes.size() << '\n';
+    }
     packet_output_(std::span<const std::byte>(bytes.data(), bytes.size()));
     return ERR_OK;
 }
