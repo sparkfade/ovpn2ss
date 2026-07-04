@@ -7,7 +7,9 @@
       "tcp_port": 10801,
       "udp_port": 10801,
       "method": "chacha20-ietf-poly1305",
-      "password": "replace-with-a-strong-password"
+      "password": "replace-with-a-strong-password",
+      "vpn_username": "",
+      "vpn_password": ""
     }
   ]
 }

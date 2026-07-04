@@ -305,6 +305,15 @@ void OpenVpnClient::start() {
 
         while (running_ && !stop_token.stop_requested()) {
             try {
+                if (!config_.vpn_username.empty() || !config_.vpn_password.empty()) {
+                    openvpn::ClientAPI::ProvideCreds creds;
+                    creds.username = config_.vpn_username;
+                    creds.password = config_.vpn_password;
+                    const auto cred_status = impl_->core.provide_creds(creds);
+                    if (cred_status.error) {
+                        std::clog << "openvpn3: provide_creds failed: " << cred_status.message << '\n';
+                    }
+                }
                 const auto status = impl_->core.connect();
 
                 reconnect_delay_ms = 2000;

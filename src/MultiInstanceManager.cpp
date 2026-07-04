@@ -83,6 +83,8 @@ ManagerConfig MultiInstanceManager::load_json_config(const std::filesystem::path
             : instance.shadowsocks.tcp_port;
         instance.shadowsocks.method = optional_string(object, "method", "chacha20-ietf-poly1305");
         instance.shadowsocks.password = required_string(object, "password");
+        instance.vpn_username = optional_string(object, "vpn_username", "");
+        instance.vpn_password = optional_string(object, "vpn_password", "");
 
         if (!std::filesystem::is_regular_file(instance.ovpn_path)) {
             throw std::runtime_error("ovpn file does not exist: " + instance.ovpn_path.string());

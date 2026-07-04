@@ -21,6 +21,8 @@ struct InstanceConfig {
     std::filesystem::path ovpn_path;
     ShadowsocksConfig shadowsocks;
     bool udp_enabled{true};
+    std::string vpn_username;
+    std::string vpn_password;
 };
 
 struct ManagerConfig {

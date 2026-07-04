@@ -80,13 +80,17 @@ ctest --test-dir build-real-openvpn --output-on-failure
       "tcp_port": 10801,
       "udp_port": 10801,
       "method": "chacha20-ietf-poly1305",
-      "password": "replace-with-a-strong-password"
+      "password": "replace-with-a-strong-password",
+      "vpn_username": "",
+      "vpn_password": ""
     }
   ]
 }
 ```
 
 最小示例见 [config.example.json](config.example.json)，完整字段说明见 [docs/configuration.md](docs/configuration.md)。
+
+如果 `.ovpn` 服务器需要用户名/密码认证（例如 VPN Gate / opengw.net，日志出现 `Creds: UsernameEmpty/PasswordEmpty` 后 `AUTH_FAILED`），请在实例中设置 `vpn_username` 与 `vpn_password`（VPN Gate 通常填 `vpn` / `vpn`）。留空则不提供凭据（适用于纯证书认证的配置）。
 
 ## 运行
 
