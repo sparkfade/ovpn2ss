@@ -171,11 +171,13 @@ struct OpenVpnClient::Impl {
         }
 
         void connect_run() override {
-            if (attached_) {
-                state->io_context()->restart();
+            if (io_context_ != nullptr) {
+                io_context_->restart();
             }
             OpenVPNClient::connect_run();
         }
+
+        void set_io_context(openvpn_io::io_context& io_context) { io_context_ = &io_context; }
 
         openvpn::TunClientFactory* new_tun_factory(const openvpn::ExternalTun::Config& conf,
             const openvpn::OptionList&) override {
@@ -255,6 +257,7 @@ struct OpenVpnClient::Impl {
         std::mutex mutex;
         MemoryTunClient::Ptr memory_tun;
         bool attached_{false};
+        openvpn_io::io_context* io_context_{nullptr};
     };
 
     CoreClient core;
@@ -263,6 +266,7 @@ struct OpenVpnClient::Impl {
 openvpn::TunClient::Ptr OpenVpnClient::Impl::MemoryTunFactory::new_tun_client_obj(
     openvpn_io::io_context& openvpn_io, openvpn::TunClientParent& parent, openvpn::TransportClient*) {
     MemoryTunClient::Ptr tun = new MemoryTunClient(owner, openvpn_io, parent, conf);
+    core.set_io_context(openvpn_io);
     core.set_memory_tun(tun);
     return tun;
 }
