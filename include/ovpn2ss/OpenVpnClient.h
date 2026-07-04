@@ -39,6 +39,7 @@ private:
     InstanceConfig config_;
     OpenVpnTunBuilder tun_builder_;
     std::unique_ptr<Impl> impl_;
+    std::mutex impl_mutex_;
     std::jthread vpn_thread_;
     std::mutex handler_mutex_;
     std::function<void()> ready_handler_;

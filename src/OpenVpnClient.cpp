@@ -163,22 +163,6 @@ struct OpenVpnClient::Impl {
     struct CoreClient final : openvpn::ClientAPI::OpenVPNClient {
         explicit CoreClient(OpenVpnClient& owner_arg) : owner(owner_arg) {}
 
-        void connect_attach() override {
-            if (!attached_) {
-                attached_ = true;
-                OpenVPNClient::connect_attach();
-            }
-        }
-
-        void connect_run() override {
-            if (io_context_ != nullptr) {
-                io_context_->restart();
-            }
-            OpenVPNClient::connect_run();
-        }
-
-        void set_io_context(openvpn_io::io_context& io_context) { io_context_ = &io_context; }
-
         openvpn::TunClientFactory* new_tun_factory(const openvpn::ExternalTun::Config& conf,
             const openvpn::OptionList&) override {
             return new MemoryTunFactory(owner, *this, conf);
@@ -256,8 +240,6 @@ struct OpenVpnClient::Impl {
         OpenVpnClient& owner;
         std::mutex mutex;
         MemoryTunClient::Ptr memory_tun;
-        bool attached_{false};
-        openvpn_io::io_context* io_context_{nullptr};
     };
 
     CoreClient core;
@@ -266,7 +248,6 @@ struct OpenVpnClient::Impl {
 openvpn::TunClient::Ptr OpenVpnClient::Impl::MemoryTunFactory::new_tun_client_obj(
     openvpn_io::io_context& openvpn_io, openvpn::TunClientParent& parent, openvpn::TransportClient*) {
     MemoryTunClient::Ptr tun = new MemoryTunClient(owner, openvpn_io, parent, conf);
-    core.set_io_context(openvpn_io);
     core.set_memory_tun(tun);
     return tun;
 }
@@ -331,7 +312,10 @@ void OpenVpnClient::start() {
                 if (needs_downgrade_.exchange(false) && !using_non_preferred && running_) {
                     using_non_preferred = true;
                     impl_->core.stop();
-                    impl_.reset(new Impl(*this));
+                    {
+                        std::lock_guard lock(impl_mutex_);
+                        impl_.reset(new Impl(*this));
+                    }
                     auto new_config = make_config(true);
                     auto new_eval = impl_->core.eval_config(new_config);
                     if (new_eval.error) {
@@ -366,6 +350,18 @@ void OpenVpnClient::start() {
             }
 
             reconnect_delay_ms = std::min(reconnect_delay_ms * 2, max_reconnect_delay_ms);
+
+            {
+                std::lock_guard lock(impl_mutex_);
+                impl_.reset(new Impl(*this));
+            }
+            auto next_config = make_config(using_non_preferred);
+            auto next_eval = impl_->core.eval_config(next_config);
+            if (next_eval.error) {
+                std::clog << "openvpn3: reconnect eval_config failed: " << next_eval.message << '\n';
+                running_ = false;
+                return;
+            }
         }
         running_ = false;
     });
@@ -379,7 +375,10 @@ void OpenVpnClient::stop() {
 #ifdef OVPN2SS_REAL_OPENVPN3
     if (was_running) {
         vpn_thread_.request_stop();
-        impl_->core.stop();
+        std::lock_guard lock(impl_mutex_);
+        if (impl_) {
+            impl_->core.stop();
+        }
     }
 #endif
 }
@@ -422,7 +421,10 @@ void OpenVpnClient::send_l3_packet(std::span<const std::byte> packet) {
     }
 
 #ifdef OVPN2SS_REAL_OPENVPN3
-    impl_->core.inject_l3_packet(packet);
+    std::lock_guard lock(impl_mutex_);
+    if (impl_) {
+        impl_->core.inject_l3_packet(packet);
+    }
 #endif
 }
 
