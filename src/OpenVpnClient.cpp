@@ -31,7 +31,9 @@ namespace ovpn2ss {
 namespace {
 
 openvpn::BufferAllocated make_openvpn_buffer(std::span<const std::byte> packet) {
-    openvpn::BufferAllocated buf(packet.size(), openvpn::BufAllocFlags::GROW);
+    constexpr std::size_t HEADROOM = 512;
+    openvpn::BufferAllocated buf(packet.size() + HEADROOM, openvpn::BufAllocFlags::GROW);
+    buf.reset_offset(HEADROOM);
     std::memcpy(buf.write_alloc(packet.size()), packet.data(), packet.size());
     return buf;
 }
@@ -270,7 +272,7 @@ void OpenVpnClient::start() {
 
     bool non_preferred = scan_ovpn_for_non_aead_cipher(content) || needs_downgrade_.exchange(false);
 
-    auto make_config = [&](bool enable_np) {
+    auto make_config = [content](bool enable_np) {
         openvpn::ClientAPI::Config c;
         c.content = content;
         c.guiVersion = "ovpn2ss 0";
@@ -288,8 +290,8 @@ void OpenVpnClient::start() {
         throw std::runtime_error("openvpn config eval failed: " + eval.message);
     }
 
-    vpn_thread_ = std::jthread([this, content, make_config](std::stop_token stop_token) {
-        bool using_non_preferred = needs_downgrade_.load() || scan_ovpn_for_non_aead_cipher(content);
+    vpn_thread_ = std::jthread([this, non_preferred, make_config](std::stop_token stop_token) {
+        bool using_non_preferred = non_preferred;
 
         while (running_ && !stop_token.stop_requested()) {
             try {
